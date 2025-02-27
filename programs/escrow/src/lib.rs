@@ -3,7 +3,7 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token::{self, Token, TokenAccount, Transfer};
 
-declare_id!("2k7TSn8QP62CbdfZJaZP9jptcnXxoycnG2iCsE4vuake");
+declare_id!("29A5c7nhZJzr1sMCKskCtarme71Bt4ggaeukgXPw1Mgs");
 
 #[program]
 pub mod escrow {
@@ -76,7 +76,7 @@ pub struct Deposit<'info> {
         init_if_needed,
         payer = user,
         space = 8 + 40 + 32, // Increased space for mint Pubkey
-        seeds = [b"escrow".as_ref(), user.key().as_ref(), user_token_account.mint.as_ref()],
+        seeds = [b"escrow", user.key().as_ref(), user_token_account.mint.as_ref()],
         bump
     )]
     pub escrow_account: Account<'info, EscrowAccount>,
@@ -101,7 +101,7 @@ pub struct Withdraw<'info> {
         constraint = escrow_account.owner == user.key(),
         constraint = escrow_token_account.owner == escrow_account.key(),
         constraint = escrow_account.mint == user_token_account.mint,
-        seeds = [b"escrow".as_ref(), escrow_account.owner.as_ref(), escrow_account.mint.as_ref()],
+        seeds = [b"escrow", escrow_account.owner.as_ref(), escrow_account.mint.as_ref()],
         bump,
         close = user
     )]

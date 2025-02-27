@@ -3,9 +3,8 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token::{Token, TokenAccount};
 
-declare_id!("E5CBom9pwN4GXeFfZgdmczaMGpgWhDV3u6Ba2nrZUTZD");
+declare_id!("GWiAFew8qfEz9vLApjigwvDiDpPK4SLMRUdWVDKekrVK");
 
-// Automatically generate module using program IDL found in ./idls
 declare_program!(escrow);
 
 use crate::escrow::accounts::EscrowAccount;
@@ -24,7 +23,6 @@ pub mod simple_cpi {
         allowance_account.allowed_amount = allowed_amount;
         allowance_account.mint = ctx.accounts.owner_token_account.mint;
 
-        // CPI call to escrow deposit
         let cpi_ctx = CpiContext::new(
             ctx.accounts.escrow_program.to_account_info(),
             Deposit {
@@ -45,23 +43,31 @@ pub mod simple_cpi {
     pub fn withdraw_allowance(ctx: Context<WithdrawAllowance>, amount: u64) -> Result<()> {
         let allowance_account = &mut ctx.accounts.allowance_account;
         
-        // Check if the allowed address is trying to withdraw
         require!(
             ctx.accounts.user.key() == allowance_account.allowed_address,
             ErrorCode::Unauthorized
         );
         
-        // Check if there's enough allowance
         require!(
             amount <= allowance_account.allowed_amount,
             ErrorCode::InsufficientAllowance
         );
         
-        // Update the allowance
         allowance_account.allowed_amount -= amount;
         
-        // CPI call to escrow withdraw
-        let cpi_ctx = CpiContext::new(
+        // Get PDA seeds and bump for escrow_account
+        let bump = ctx.bumps.escrow_account; // Access the bump from the context
+        let owner_key = allowance_account.owner; // Owner from allowance_account
+        let mint_key = ctx.accounts.user_token_account.mint; // Mint from token account
+        let seeds = &[
+            b"escrow".as_ref(),
+            owner_key.as_ref(),
+            mint_key.as_ref(),
+            &[bump],
+        ];
+        let signer_seeds = &[&seeds[..]];
+        
+        let cpi_ctx = CpiContext::new_with_signer(
             ctx.accounts.escrow_program.to_account_info(),
             Withdraw {
                 user: ctx.accounts.user.to_account_info(),
@@ -70,6 +76,7 @@ pub mod simple_cpi {
                 escrow_account: ctx.accounts.escrow_account.to_account_info(),
                 token_program: ctx.accounts.token_program.to_account_info(),
             },
+            signer_seeds,
         );
         
         withdraw(cpi_ctx)?;
@@ -80,7 +87,6 @@ pub mod simple_cpi {
     pub fn update_allowance(ctx: Context<UpdateAllowance>, new_allowance: u64) -> Result<()> {
         let allowance_account = &mut ctx.accounts.allowance_account;
         
-        // Ensure only the owner can update allowance
         require!(
             ctx.accounts.owner.key() == allowance_account.owner,
             ErrorCode::Unauthorized
@@ -96,16 +102,26 @@ pub mod simple_cpi {
 pub struct CreateAllowance<'info> {
     #[account(mut)]
     pub owner: Signer<'info>,
-    /// CHECK: This is just used as a reference for allowance
+    /// CHECK: This is just a reference Pubkey for the allowance, validated in withdraw_allowance.
     pub allowed_address: UncheckedAccount<'info>,
     #[account(
         mut,
         constraint = owner_token_account.owner == owner.key(),
     )]
     pub owner_token_account: Account<'info, TokenAccount>,
-    #[account(mut)]
+    #[account(
+        mut,
+        constraint = escrow_token_account.mint == owner_token_account.mint,
+        constraint = escrow_token_account.owner == escrow_account.key()
+    )]
     pub escrow_token_account: Account<'info, TokenAccount>,
-    #[account(mut)]
+    #[account(
+        init_if_needed,
+        payer = owner,
+        space = 8 + 40 + 32,
+        seeds = [b"escrow", owner.key().as_ref(), owner_token_account.mint.as_ref()],
+        bump
+    )]
     pub escrow_account: Account<'info, EscrowAccount>,
     #[account(
         init,
@@ -131,7 +147,11 @@ pub struct WithdrawAllowance<'info> {
     pub user_token_account: Account<'info, TokenAccount>,
     #[account(mut)]
     pub escrow_token_account: Account<'info, TokenAccount>,
-    #[account(mut)]
+    #[account(
+        mut,
+        seeds = [b"escrow", allowance_account.owner.as_ref(), user_token_account.mint.as_ref()],
+        bump,
+    )]
     pub escrow_account: Account<'info, EscrowAccount>,
     #[account(
         mut,
@@ -147,6 +167,7 @@ pub struct WithdrawAllowance<'info> {
 pub struct UpdateAllowance<'info> {
     #[account(mut)]
     pub owner: Signer<'info>,
+    /// CHECK: This is just a reference Pubkey for the allowance, validated by ownership check.
     pub allowed_address: UncheckedAccount<'info>,
     #[account(
         mut,
@@ -159,10 +180,10 @@ pub struct UpdateAllowance<'info> {
 
 #[account]
 pub struct AllowanceAccount {
-    pub owner: Pubkey,           
-    pub allowed_address: Pubkey, 
-    pub allowed_amount: u64,     
-    pub mint: Pubkey,           
+    pub owner: Pubkey,
+    pub allowed_address: Pubkey,
+    pub allowed_amount: u64,
+    pub mint: Pubkey,
 }
 
 #[error_code]

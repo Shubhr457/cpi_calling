@@ -4,15 +4,15 @@
 resolution = true
 skip-lint = false
 
-[programs.devnet]
-simple_cpi = "E5CBom9pwN4GXeFfZgdmczaMGpgWhDV3u6Ba2nrZUTZD"
-escrow = "2k7TSn8QP62CbdfZJaZP9jptcnXxoycnG2iCsE4vuake"
+[programs.localnet]
+escrow = "29A5c7nhZJzr1sMCKskCtarme71Bt4ggaeukgXPw1Mgs"
+simple_cpi = "GWiAFew8qfEz9vLApjigwvDiDpPK4SLMRUdWVDKekrVK"
 
 [registry]
 url = "https://api.apr.dev"
 
 [provider]
-cluster = "devnet"
+cluster = "Devnet"
 wallet = "~/.config/solana/id.json"
 
 [scripts]
